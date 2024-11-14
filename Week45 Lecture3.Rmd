@@ -1,0 +1,107 @@
+---
+title: "Lecture 3"
+author: "562770bf"
+date: "2024-11-14"
+output: html_document
+---
+This is the second Readme file for the Data Science and HR analytics course, trying out experiments on the code for lecture 3.
+
+So let's get started. 
+```{r}
+oj <- read.csv("/Users/annelies2/Downloads/oj.csv")
+head(oj, n=5)
+tail(oj, n=5)
+glm(log(sales) ~ brand + log(price), data=oj)
+```
+The code starts by loading a CSV file from a specified location into a data frame called `oj`. It then shows the first five rows of the data with `head()`, giving a quick glimpse of the beginning of the dataset, and uses `tail()` to display the last five rows for a sense of the data's conclusion. Finally, it runs a regression (GLM) to examine how the log of sales is influenced by brand and the log of price, with these two factors acting as predictors. This helps to understand the relationship between the sales, brand, and price in the dataset.
+```{r}
+x <- model.matrix(~ brand + log(price), data=oj); head(x); tail(x)
+oj$brand = as.factor(oj$brand)
+x <- model.matrix(~ brand + log(price), data=oj); head(x)
+oj$mybrand = relevel(oj$brand, "tropicana")
+x <- model.matrix(~ mybrand + log(price), data=oj); head(x)
+glm(log(sales) ~ log(price)*brand*feat, data=oj)
+```
+This code first creates a design matrix `x` for the predictors `brand` and `log(price)` in the `oj` dataset, showing the matrix form of these variables. It then relevels the `brand` variable by setting "tropicana" as the reference level and creates a new design matrix `x` based on this releveling. Finally, the code fits a generalized linear model (GLM) to predict `log(sales)` based on the interaction of `log(price)`, `brand`, and `feat` (features).
+```{r}
+#Experiment
+oj$brand = as.factor(oj$brand)
+# Fit a GLM model without interaction term
+model_no_interaction <- glm(log(sales) ~ log(price) + brand, data=oj)
+summary(model_no_interaction)
+# Fit a GLM model with interaction term
+model_with_interaction <- glm(log(sales) ~ log(price) * brand, data=oj)
+summary(model_with_interaction)
+# Compare AIC (Akaike Information Criterion) to evaluate the model performance
+AIC(model_no_interaction, model_with_interaction)
+# Plot the results
+par(mfrow = c(1, 2))
+plot(model_no_interaction$fitted.values, oj$log_sales, main = "Model without Interaction")
+plot(model_with_interaction$fitted.values, oj$log_sales, main = "Model with Interaction")
+```
+This experiment compares two GLM models predicting log(sales) based on price and brand. The first model does not include an interaction term between price and brand, while the second one does. We then compare the models using AIC to see which fits better. The plots visualize how well each model fits the data by comparing the fitted values to the actual sales.
+
+By adding the interaction term, we allow the effect of price to change depending on the brand. Comparing the AIC values helps us determine if this added complexity improves the model. The visual comparison shows if the models capture the relationship between price, brand, and sales effectively.
+```{r}
+email <- read.csv("/Users/annelies2/Downloads/spam.csv")
+dim(email)
+colnames(email)
+glm(spam ~ ., data=email, family='binomial')
+```
+This code reads in a dataset called "spam.csv", checks its dimensions and column names, and then fits a logistic regression model (binomial family) to predict whether an email is spam using all the variables in the dataset.
+```{r}
+#Experiment
+# Assuming 'free' and 'money' are columns representing the presence of these words
+email <- read.csv("/Users/annelies2/Downloads/spam.csv")
+model <- glm(spam ~ word_free * word_money, data=email, family='binomial')
+summary(model)
+
+```
+After running the experiment, you can look at the summary of the model to see if the interaction term is significant. If it is, this would suggest that emails containing both "free" and "money" together are more likely to be spam than emails containing either word alone.
+
+From this experiment, you may learn which combinations of words increase the probability of an email being classified as spam, helping refine spam detection models.
+```{r}
+email <- read.csv("/Users/annelies2/Downloads/spam.csv")
+spammy <- glm(spam ~ ., data=email, family='binomial')
+coef(spammy)["word_free"];exp(coef(spammy)["word_free"])
+coef(spammy)["word_george"]; exp(coef(spammy)["word_george"]); 1/exp(coef(spammy)["word_george"])
+```
+This code loads a dataset (spam.csv) into the email variable.
+Fits a logistic regression model (spammy) to predict whether an email is spam based on its features (all columns except for the target variable spam).
+Extracts the coefficient for the term word_free and calculates its odds ratio by exponentiating the coefficient.
+Does the same for the term word_george, showing both the coefficient and the odds ratio.
+It also computes the inverse of the odds ratio for word_george.
+```{r}
+#Experiment 
+spammy_interaction <- glm(spam ~ word_free * word_george, data=email, family='binomial')
+coef(spammy_interaction)
+exp(coef(spammy_interaction))
+```
+By adding interaction terms (e.g., word_free * word_george), we can test whether the combination of specific words increases the likelihood of an email being marked as spam. The odds ratio for an interaction term will give us insight into how the combination of these two words affects the probability of spam.
+```{r}
+predict(spammy, newdata = email[c(1,4000),], type="response")
+```
+This code uses the fitted logistic regression model spammy to predict the probability that the first and 4000th emails in the dataset are spam. It uses the type="response" argument to return the predicted probabilities, which is the likelihood that each email is spam, rather than just the log-odds.
+```{r}
+#Experiment
+set.seed(123)
+sample_emails <- sample(1:nrow(email), 5)
+predictions <- predict(spammy, newdata = email[sample_emails,], type="response")
+predictions
+```
+This experiment predicts the probability of spam for five random emails. From the results, I learned that the model can give varying probabilities for spam based on the words used in the email. A higher probability means the email is more likely to be spam according to the model, and we can use this information to classify emails more effectively.
+```{r}
+summary(spammy)$deviance
+summary(spammy)$null.deviance
+```
+The code summary(spammy) deviance retrieves the deviance of the fitted logistic regression model, which measures the goodness of fit. A lower deviance value indicates a better model fit to the data. summary(spammy) null.deviance gives the deviance of a null model, which is a model with no predictors—just an intercept. The comparison of these two values can help us assess the improvement in model fit due to the predictors in the model.
+
+Deviance (1548.66): This is the deviance of the fitted model, which quantifies how well the model fits the data. It’s based on the likelihood of the model. A lower deviance indicates a better fit, as it means the model's predictions are closer to the observed values.
+Null Deviance (6170.153): This is the deviance of the null model, which includes no predictors (just an intercept). It represents how well the model would perform if we predicted the outcome with just the average value (i.e., without considering any explanatory variables).
+
+```{r}
+D <- summary(spammy)$deviance; D
+D0 <- summary(spammy)$null.deviance; D0
+R2 <- 1 - D/D0; R2
+```
+The code gives the McFadden's R² value, which is a measure of the model's goodness of fit.
