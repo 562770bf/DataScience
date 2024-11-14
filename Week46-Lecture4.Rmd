@@ -1,0 +1,139 @@
+---
+title: "Week46 Lecture4"
+author: "562770bf"
+date: "2024-11-14"
+output: html_document
+---
+This is the second Readme file for the Data Science and HR analytics course, trying out experiments on the code for lecture 4.
+
+So let's get started. 
+```{r}
+SC <- read.csv("/Users/annelies2/Downloads/semiconductor.csv")
+full <- glm(FAIL ~ ., data=SC, family=binomial)
+1 - full$deviance/full$null.deviance
+```
+Running this formula will give you an indication of how much your predictors (variables in the semiconductor dataset) improve the model's ability to predict the outcome, FAIL (whether or not a semiconductor failed). A higher R² indicates better model performance in terms of explaining the failure.
+```{r}
+deviance <- function(y, pred, family=c("gaussian","binomial")){
+family <- match.arg(family)
+if(family=="gaussian"){
+return( sum( (y-pred)^2 ) )
+}else{
+if(is.factor(y)) y <- as.numeric(y)>1
+return( -2*sum( y*log(pred) + (1-y)*log(1-pred) ) )
+}
+}
+## get null devaince too, and return R2
+R2 <- function(y, pred, family=c("gaussian","binomial")){
+fam <- match.arg(family)
+if(fam=="binomial"){
+if(is.factor(y)){ y <- as.numeric(y)>1 }
+}
+dev <- deviance(y, pred, family=fam)
+dev0 <- deviance(y, mean(y), family=fam)
+return(1-dev/dev0)
+}
+# setup the experiment
+n <- nrow(SC) # the number of observations
+K <- 10 # the number of `folds'
+# create a vector of fold memberships (random order)
+foldid <- rep(1:K,each=ceiling(n/K))[sample(1:n)]
+# create an empty dataframe of results
+Out <- data.frame(full=rep(NA,K))
+# use a for loop to run the experiment
+for(k in 1:K){
+train <- which(foldid!=k) # train on all but fold `k'
+## fit regression on full sample
+rfull <- glm(FAIL~., data=SC, subset=train, family=binomial)
+## get prediction: type=response so we have probabilities
+predfull <- predict(rfull, newdata=SC[-train,], type="response")
+## calculate and log R2
+Out$full[k] <- R2(y=SC$FAIL[-train], pred=predfull, family="binomial")
+## print progress
+cat(k, " ")
+}
+boxplot(Out, col="blue", ylab="R2")
+colMeans(Out)
+```
+This code performs 10-fold cross-validation on a logistic regression model using the semiconductor dataset. It calculates McFadden's R² for each fold to assess model performance. The deviance function measures model fit, while the R² function compares the model to a null model. After running the cross-validation, the results are visualized with a boxplot.
+
+A negative McFadden's R² usually suggests the model is not fitting the data well, and perhaps further model improvements or more relevant predictors are needed. It’s common in situations where the predictors do not have enough predictive power or if the model is overfitting.
+```{r}
+null <- glm(FAIL~1, data=SC)
+fwd <- step(null, scope=formula(full), dir="forward")
+```
+This code performs a forward stepwise selection, starting with a null model (only intercept) and iteratively adding predictors from the `full` model to improve the fit, selecting the best model based on statistical criteria like AIC.
+```{r, fig.width=7, fig.height=5,echo=FALSE}
+# Mock data for HTML rendering
+web <- data.frame(id = c(1, 2, 3), site = c(1, 2, 3), visits = c(10, 20, 30)) 
+sitenames <- c("Site1", "Site2", "Site3")
+web$site <- factor(web$site, levels=1:length(sitenames), labels=sitenames)
+web$id <- factor(web$id, levels=1:length(unique(web$id)))
+
+machinetotals <- as.vector(tapply(web$visits, web$id, sum)) 
+visitpercent <- 100 * web$visits / machinetotals[web$id]
+
+library(Matrix)
+xweb <- sparseMatrix(i=as.numeric(web$id), j=as.numeric(web$site), x=visitpercent,
+                     dims=c(nlevels(web$id), nlevels(web$site)),
+                     dimnames=list(id=levels(web$id), site=levels(web$site)))
+
+# Mock spending data for HTML rendering
+yspend <- matrix(c(100, 200, 300), ncol=1)
+
+library(gamlr)
+spender <- gamlr(xweb, log(yspend), verb=TRUE)
+
+# Plot the result
+plot(spender) ## path plot
+```
+This code processes web browsing data by first converting the site and machine IDs into factors, then calculates the total number of visits per machine and the percentage of time spent on each site. It constructs a sparse matrix where rows represent machines, columns represent websites, and the values are the visit percentages. The code then fits a model using the `gamlr` package to predict spending based on website visit patterns and visualizes the model's path.
+
+To conduct the experiment, you can modify your matrix xweb by introducing a new variable like visit_time, which would represent the time spent on each site. You would then run the gamlr model again using the new matrix, compare the results, and check whether the addition of this variable improves the model's predictive power.
+```{r}
+# Experiment
+# Add a new variable for time spent on each site (you can create this by multiplying visits by time per visit)
+# For demonstration, let's assume a random time spent between 1 to 10 minutes on each site
+set.seed(42) # for reproducibility
+web$visit_time <- sample(1:10, nrow(web), replace = TRUE)
+
+# Recompute the sparse matrix to include time spent
+visit_time_percent <- 100 * web$visit_time / machinetotals[web$id]  # Calculate visit time percentages
+
+# Create the new sparse matrix with time spent
+xweb_time <- sparseMatrix(
+    i = as.numeric(web$id), j = as.numeric(web$site), x = visit_time_percent,
+    dims = c(nlevels(web$id), nlevels(web$site)),
+    dimnames = list(id = levels(web$id), site = levels(web$site))
+)
+
+# Check the new matrix (just a sample of visits for the first machine)
+head(xweb_time[1, xweb_time[1,] != 0])
+
+# Run the gamlr model with the new matrix that includes time spent
+spender_time <- gamlr(xweb_time, log(yspend), verb = TRUE)
+
+# Plot the new path plot
+plot(spender_time)
+
+# Compare the path plot to the previous one
+```
+The dashed line shifting from 226 to 306 indicates a change in the optimal regularization parameter. This suggests that, with the new settings or data, a stronger regularization is required to minimize overfitting. The model has adjusted to fit the data in a way that reduces complexity and helps prevent the coefficients from becoming too large. This might reflect the importance of finding the right balance between fitting the data and keeping the model generalizable.
+```{r}
+cv.spender <- cv.gamlr(xweb, log(yspend))
+plot(cv.spender)
+```
+How the cross-validation error changes with different lambda values is shown. The optimal lambda is often marked, and it indicates the regularization strength that leads to the best model performance.
+```{r}
+betamin = coef(cv.spender, select="min"); betamin
+```
+The code betamin = coef(cv.spender, select="min") extracts the coefficients from the model selected at the minimum cross-validation error (lambda.min). This step is important because lambda.min represents the regularization parameter value that gives the best model performance according to cross-validation.
+
+We do get different results as each run could create a different split of the data into training and test sets, which could influence the coefficients chosen.
+
+```{r}
+head(AIC(spender))
+```
+The code head(AIC(spender)) is used to display the first few rows of the Akaike Information Criterion (AIC) values for the fitted model spender. AIC is a metric used to compare different models; lower AIC values indicate better-fitting models while penalizing for the number of parameters (to avoid overfitting).
+
+By examining the AIC values, you can see how model fit improves (or worsens) as the regularization strength (lambda) changes. You might observe that as you increase lambda (regularization), AIC tends to increase, indicating a worse fit, but at some point, a smaller lambda might overfit the data, and AIC will decrease. Finding the "sweet spot" of lambda can help balance model complexity and fit.
