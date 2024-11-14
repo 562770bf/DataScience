@@ -1,0 +1,58 @@
+---
+title: "Week 44"
+author: "562770bf"
+date: "2024-10-28"
+output: html_document
+---
+This is the first Readme file for the Data Science and HR analytics course, trying out experiments on the code for week 44.
+
+So let's get started. 
+```{r}
+CEO_Diary <- read.csv("~/Dropbox/Mijn Mac (Macintosh.local)/Downloads/2017765data/behaviors/python_index-construction/baseline_results/survey_response_data.csv")
+```
+
+This command reads the csv file and calls the data in the table CEO Diary. The view command (not included as that does not work in a markdown file) just shows a visual overview of the data in a table. 
+
+```{r}
+CEO_Diary[1:15,c(1:5,37, 39, 40)] 
+```
+This command shows a table of the previously inserted data, the first term shows the number of rows, 1 through 15 and the next term specifies the columns shown (1 through 5, 37, 39 and 40). Hence you can easily change the specifications to show a different number of rows and different variables as columns.
+```{r}
+CEO_Diary[1:7,c(6, 15, 21, 27, 35)] 
+apply(CEO_Diary,2,class)
+```
+The apply class command shows what sort of type the variables are, most of which are defined as string variables. The number 2 specifies that it will define the type for the columns. If you choose 1 instead of 2, it will do so for the rows. If you choose mean/max/min instead of class, it will define those values instead, which does not work here as most variables are all string variables. 
+```{r}
+nrow(CEO_Diary)
+summary(CEO_Diary[1:5])
+summary(CEO_Diary[5:10])
+summary(CEO_Diary[37])
+```
+The nrow command shows the number of rows in the data. The summary command shows a summary of the specified columns/variable range. 
+```{r}
+  png(file="~/Dropbox/Mijn Mac (Macintosh.local)/Downloads/CEO_Types.png", width=800, height=300)
+  par(mar=c(9, 3 ,1,1))
+  barplot(prop.table(table(CEO_Diary$type)), las=2)
+  dev.off()
+```
+The code above saves a PNG file showing the relative frequency of each CEO type in CEO_Diary$type. The barplot function plots proportions, and the las=2 argument rotates axis labels for readability.
+
+```{r}
+  table(CEO_Diary$type)
+  prop.table(table(CEO_Diary$type))
+  barplot(prop.table(table(CEO_Diary$type)))
+  barplot(prop.table(table(CEO_Diary$type)), las=2)
+```
+The table command creates a frequency table for the type variable in the CEO_Diary dataset.The result shows the count of each unique value in the type column, helping you understand the distribution of CEO activity types.
+The prop.table converts the frequency counts into proportions, showing the relative frequency of each type category as a fraction of the total count (i.e., each category’s share in decimal form).
+The third line of code creates a bar plot of the proportions calculated in the previous step.Each bar represents a different type of CEO activity, with the bar height showing the proportion of that activity type relative to the total.
+The final line of code repeats the bar plot, but with las=2, which rotates the x-axis labels to be perpendicular to the axis. This rotation can make labels more readable if there are many categories or if the labels are lengthy.
+```{r}
+CEO_Diary <- read.csv("~/Dropbox/Mijn Mac (Macintosh.local)/Downloads/2017765data/behaviors/python_index-construction/baseline_results/survey_response_data.csv")
+fit <- glm(strategy ~ consultants + politicians, data=CEO_Diary); summary(fit)
+```
+
+This command fits a regression model, depending on the data type of strategy) where:
+strategy is the dependent variable or outcome.Consultants and politicians are the independent variables.
+'Data=CEO_Diary' specifies that the data for this model comes from the CEO_Diary dataset.
+The glm term is a function for fitting generalized linear models, which includes a variety of model types (e.g., logistic regression for binary outcomes or linear regression for continuous outcomes).
