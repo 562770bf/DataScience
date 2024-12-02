@@ -1,0 +1,293 @@
+---
+title: "Lecture 5"
+author: "562770bf"
+date: "2024-11-20"
+output: html_document
+---
+This is a Readme file for the Data Science and HR analytics course, trying out experiments on the code for lecture 5.
+
+So let's get started. 
+```{r}
+library(MASS)
+data(fgl)
+dim(fgl)
+head(fgl, n = 2)
+```
+The code loads the `MASS` library and the `fgl` dataset, then checks the dimensions and displays the first two rows of the dataset. This helps in understanding the structure of the dataset. The `fgl` dataset includes data on the composition of glass, and the first two rows show variables like the type of glass and measurements such as refractive index and content of different elements.
+```{r}
+x <- scale(fgl[,1:9]) # column 10 is class label, scale converts to mean 0 sd 1
+apply(x,2,sd) # apply function sd to columns of x
+```
+The code first scales the first 9 columns of the `fgl` dataset, which normalizes the data by converting each column to have a mean of 0 and a standard deviation of 1. Then, it applies the `sd` (standard deviation) function to each of the columns of the scaled data using the `apply` function. This checks if the scaling has worked, as the standard deviation for each column should now be 1.
+```{r}
+library(class) #has knn function 
+test <- sample(1:214,10) #draw a random sample of 10 rows 
+nearest1 <- knn(train=x[-test,], test=x[test,], cl=fgl$type[-test], k=1)
+nearest5 <- knn(train=x[-test,], test=x[test,], cl=fgl$type[-test], k=5)
+data.frame(fgl$type[test],nearest1,nearest5)
+```
+This code uses the `knn` function from the `class` library to perform a k-nearest neighbors classification. First, it creates a random sample of 10 rows from the `fgl` dataset. Then, it applies the k-NN algorithm twice: once with `k=1` (using the closest neighbor) and once with `k=5` (using the 5 closest neighbors). The `train` data consists of all rows except the selected test rows, and the `test` data consists of the randomly selected rows. The actual class labels for the test rows (`fgl$type[test]`) are compared with the predicted class labels for both values of `k` (nearest1 and nearest5). Finally, the results are displayed in a data frame.
+```{r}
+#Experiment
+test <- sample(1:214, 10)  # Draw a random sample of 10 rows from the dataset
+x <- scale(fgl[,1:9])  # Scale the features to have mean 0 and standard deviation 1
+# k-NN with k=3
+nearest3 <- knn(train=x[-test,], test=x[test,], cl=fgl$type[-test], k=3)
+# Show results
+data.frame(Actual=fgl$type[test], Predicted_k3=nearest3)
+```
+By using k = 3, we are considering the three nearest neighbors to classify each sample. One can compare how k = 3 performs relative to the results from k = 1 and k = 5. One may find that a middle range of k, such as 3, can sometimes balance the bias and variance better, leading to more stable predictions.
+```{r}
+credit <- read.csv("/Users/annelies2/Downloads/credit.csv")
+head(credit)
+dim(credit)
+```
+The code you provided reads in a CSV file containing credit data and displays the first few rows using head, along with the dimensions of the dataset using dim.
+```{r}
+library(gamlr)
+source("/Users/annelies2/Downloads/naref.R")
+credx <- sparse.model.matrix(Default ~ . ^ 2, data=naref(credit))
+```
+library(gamlr) loads the gamlr package, which is used for generalized additive models and regularization.
+The third line of code creates a sparse model matrix from the credit dataset using all the predictor variables, including interactions (since . ^ 2 includes all pairwise interactions between variables). 
+colnames(credx) returns the names of the columns in the sparse matrix, which is left out for the sake of the html document structure.
+
+This thus will give you a model matrix, which can be used for fitting models, and will include columns representing all possible interactions between the predictors. You will see the column names corresponding to the variables and their interactions.
+```{r}
+# Experiment
+# Creating the sparse matrix with up to third-order interactions
+credx_higher_interactions <- sparse.model.matrix(Default ~ .^3 , data=naref(credit))
+```
+By changing the interaction terms (i.e., adjusting . ^ 2 to . ^ 3), we can control the complexity of the model. The more complex the interactions (i.e., including higher-order interactions), the more columns the sparse matrix will have. This can increase the model’s ability to capture more complex relationships in the data but can also lead to overfitting, especially with high-dimensional datasets. By comparing the number of columns in each credx matrix (credx_main_effects, credx_interactions, and credx_higher_interactions), I can see how the inclusion of interactions affects the model.
+
+For instance, using only main effects might yield fewer columns and result in a simpler model, while using higher-order interactions will increase the number of features and potentially improve the model’s ability to make predictions, but may also lead to overfitting if not properly regularized.
+```{r}
+default <- credit$Default
+credscore <- cv.gamlr(credx, default, family="binomial")
+```
+This code performs a cross-validation using the cv.gamlr function from the gamlr package.
+
+The second line extracts the target variable from the credit dataset. This is a binary variable indicating whether a person has defaulted on a loan or not.
+The third line applies cross-validation to fit a generalized additive model with regularization (from gamlr) on the credx model matrix and the default target variable. The family="binomial" argument specifies that this is a logistic regression model, as the target is binary.
+This code evaluates the model's performance by partitioning the data into multiple subsets (using cross-validation), training the model on the subsets, and then assessing its performance based on its ability to predict the default status.
+```{r}
+par(mfrow=c(1,2))
+plot(credscore$gamlr)
+plot(credscore)
+```
+The first line of code sets up the plotting area with one row and two columns for displaying two plots side by side. The second line of code plots the results from the cross-validation (the first plot) using the gamlr model and its fitted path, showing how the coefficients evolve with the regularization parameter. The third line plots the overall cross-validation results, showing the relationship between the regularization parameter (lambda) and the model’s performance, typically the mean cross-validation error.
+
+```{r}
+# Experiment
+# Set the number of folds to 5 instead of the default 10
+credscore_5folds <- cv.gamlr(credx, default, family="binomial", nfold=5)
+
+# Plot the results
+par(mfrow=c(1,2))
+plot(credscore_5folds$gamlr)  # Plot the regularization path
+plot(credscore_5folds)        # Plot the cross-validation results
+```
+By using 5 folds instead of the default 10, we'll have fewer partitions for training and testing. This can sometimes lead to a more biased model if the dataset is small, but it can also increase computation speed.
+```{r}
+sum(coef(credscore, s="min")!=0) # min
+sum(coef(credscore$gamlr)!=0) # AICc
+sum(coef(credscore$gamlr, s=which.min(AIC(credscore$gamlr)))!=0) # AIC
+# the OOS R^2
+1 - credscore$cvm[credscore$seg.min]/credscore$cvm[1]
+```
+The first line of code counts how many coefficients are different from zero when the model is selected using the minimum cross-validation error. The second line does the same but with the model selected using the AICc (corrected Akaike Information Criterion). The third line does the same as the second, but it uses the AIC from the gamlr model instead of the default selection method.
+
+The last line calculates the out-of-sample R², which helps to evaluate the model's ability to generalize to unseen data. It does this by comparing the cross-validation error of the model selected at the minimum cross-validation error point to the cross-validation error of the intercept-only model (baseline model). If the value is close to 1, it suggests that the model fits the data well and explains much of the variance; if it is close to 0, it indicates poor predictive performance compared to the baseline.
+
+By experimenting with these lines, we are exploring how different model selection methods (minimum cross-validation error, AICc, AIC) affect the number of non-zero coefficients and how well the model generalizes to new data (measured by OOS R²).
+
+```{r}
+## What are the underlying default probabilities
+## In sample probability estimates
+pred <- predict(credscore$gamlr, credx, type="response")
+pred <- drop(pred) # remove the sparse Matrix formatting
+boxplot(pred ~ default, xlab="default", ylab="prob of default", col=c("pink","dodgerblue"))
+```
+The first line of code uses the fitted model to predict the probability of default for each observation in the dataset, using the credx matrix. The type argument ensures that these are probability estimates, rather than the raw linear predictions.
+
+The second line drops the sparse matrix formatting from the predicted values to make the result easier to work with.
+
+The last line creates a boxplot that visualizes the predicted probabilities of default, separated by the actual default status. It shows two groups: one for customers who did not default (default = 0) and another for customers who did default (default = 1). The boxplot uses different colors to differentiate the groups. This allows you to visually compare the predicted probabilities for each group and assess how well the model distinguishes between the two.
+
+Through this, we can learn whether the model is providing reasonable probability estimates for defaulting, as we should expect the predicted probabilities for non-defaulters to be low and for defaulters to be higher. If the boxplot shows significant overlap, it may indicate that the model has difficulty distinguishing between the two groups.
+```{r}
+# Experiment
+# First, let's try changing the threshold for default classification
+threshold <- 0.3  # Set a different threshold value for default classification
+pred_class <- ifelse(pred > threshold, 1, 0)
+
+# Now, let's compare the default classification based on this new threshold
+table(pred_class, default)
+
+# We can also visualize the distribution of predicted probabilities with different threshold categories
+threshold_class <- factor(pred_class, levels=c(0, 1), labels=c("No Default", "Default"))
+boxplot(pred ~ threshold_class, xlab="Threshold Classification", ylab="Probability of Default", col=c("lightgreen", "purple"))
+```
+Changing the threshold allows us to adjust the sensitivity of the classification model. A lower threshold (e.g., 0.3) would classify more observations as "default," potentially increasing the sensitivity (but at the cost of more false positives). You can assess the impact of different thresholds by inspecting the classification results and seeing how they affect the model's ability to differentiate between defaults and non-defaults.
+The boxplot visualization helps to compare the predicted probabilities for each group, allowing us to see if the predictions align with expectations for each category based on the threshold.
+```{r}
+rule <- 1/5 # move this around to see how these change
+sum( (pred>rule)[default==0] )/sum(pred>rule) ## false positive rate at 1/5 rule
+sum( (pred<rule)[default==1] )/sum(pred<rule) ## false negative rate at 1/5 rule
+```
+This code is measuring the false positive and false negative rates based on a threshold rule for classification. The threshold rule is initially set to 1/5, which means that any predicted probability greater than 1/5 will be classified as "default."
+```{r}
+# Experiment
+# Change the threshold value (rule)
+rule <- 0.3  # Try different values such as 0.3 or 0.7
+
+# Calculate false positive rate at the current threshold
+false_positive_rate <- sum((pred > rule)[default == 0]) / sum(pred > rule)
+cat("False Positive Rate at rule =", rule, ":", false_positive_rate, "\n")
+
+# Calculate false negative rate at the current threshold
+false_negative_rate <- sum((pred < rule)[default == 1]) / sum(pred < rule)
+cat("False Negative Rate at rule =", rule, ":", false_negative_rate, "\n")
+```
+By adjusting the threshold (rule), you can observe how the false positive rate and false negative rate are impacted. A lower threshold (e.g., 0.3) would increase the number of observations classified as "default," which might decrease the false negative rate but increase the false positive rate. On the other hand, a higher threshold (e.g., 0.7) might reduce false positives but increase false negatives. This helps us find the balance between sensitivity (correctly identifying defaults) and specificity (correctly identifying non-defaults)
+```{r}
+sum( (pred>rule)[default==1] )/sum(default==1) ## sensitivity
+sum( (pred<rule)[default==0] )/sum(default==0) ## specificity
+```
+The first line of code calculates sensitivity, which is the proportion of actual defaulters that the model correctly identifies as defaulters. It does this by comparing the predictions greater than the threshold (rule) to the actual defaults (where default == 1) and dividing by the total number of actual defaulters.
+
+The second line calculates specificity, which is the proportion of non-defaulters that the model correctly identifies as non-defaulters. It compares predictions less than the threshold (rule) to the actual non-defaults (where default == 0) and divides by the total number of actual non-defaulters.
+
+```{r}
+#Experiment
+# Define a range of thresholds to experiment with
+thresholds <- seq(0.1, 0.9, by=0.1)
+
+# Create an empty data frame to store sensitivity and specificity results
+results <- data.frame(threshold=thresholds, sensitivity=NA, specificity=NA)
+
+# Loop through each threshold value and calculate sensitivity and specificity
+for (i in 1:length(thresholds)) {
+  rule <- thresholds[i]
+  
+  # Calculate sensitivity
+  sensitivity <- sum((pred > rule)[default == 1]) / sum(default == 1)
+  
+  # Calculate specificity
+  specificity <- sum((pred < rule)[default == 0]) / sum(default == 0)
+  
+  # Store the results
+  results[i, "sensitivity"] <- sensitivity
+  results[i, "specificity"] <- specificity
+}
+
+# View the results
+print(results)
+```
+From the results of the experiment, we can conclude that as the threshold increases, sensitivity decreases while specificity increases.
+
+- At lower thresholds, the model tends to predict a higher number of true positives (sensitivity is high) but also results in more false positives (specificity is lower). This is evident as the sensitivity remains high at 0.983 at a threshold of 0.1, while specificity is low at 0.28.
+  
+- As the threshold increases, sensitivity drops significantly, indicating the model is becoming more conservative and predicting fewer defaults (true positives). On the other hand, specificity rises, as the model is now more cautious in predicting non-defaults, leading to fewer false positives.
+
+- By the time the threshold is 0.9, sensitivity is very low (0.0033), indicating that almost all defaults are missed. However, specificity is very high (1.0), meaning the model is effectively predicting non-defaults but not identifying most of the defaults.
+
+This trade-off between sensitivity and specificity is typical when adjusting decision thresholds in classification models. Lowering the threshold increases sensitivity but sacrifices specificity, while raising the threshold increases specificity but sacrifices sensitivity. The choice of threshold depends on the problem at hand and the cost of false positives versus false negatives.
+```{r}
+credit$history <- as.factor(credit$history)  # Ensure history is a factor
+par(mai=c(.8,.8,.1,.1))
+plot(factor(Default) ~ history, data=credit, col=c(8,2), ylab="Default")
+```
+The first line of code ensures that the variable history is treated as a factor. 
+
+The second part of the code adjusts the margins of the plot. The mai argument is a vector of four values that represent the size of the margins on the bottom, left, top, and right sides of the plot (in inches).
+
+Finally, the plot command creates a plot. The left side of the formula is the outcome variable, and history is the explanatory variable. This means you are plotting the default status (likely a binary outcome, like "default" or "no default") against the history variable. The col=c(8,2) specifies the colors for the plot, and ylab=Default adds a label to the y-axis. 
+```{r}
+library(glmnet)
+xfgl <- sparse.model.matrix(type~.*RI, data=fgl)[,-1] #Design matrix includes chemical composition variables and all their interactions with refractive index (RI).
+gtype <- fgl$type
+glassfit <- cv.glmnet(xfgl, gtype, family="multinomial") #cross validation experiments
+glassfit
+plot(glassfit)
+```
+The second line creates a sparse design matrix  from the fgl dataset, including all the chemical composition variables and their interactions with the refractive index. The sparse.model.matrix function is used to create this matrix efficiently, and the [-1] removes the intercept column.
+
+The third line assigns the type variable (the class of the glass type) from the fgl dataset to gtype.
+
+The fourth line uses the cv.glmnet function to perform cross-validation and fit a multinomial logistic regression model. This function will find the best lambda (regularization parameter) through cross-validation, and it uses the gtype as the response variable, with xfgl as the predictor matrix.
+
+The final line outputs the result of the cross-validation experiment.
+
+To summarize, this code is performing a multinomial logistic regression with cross-validation to predict the glass type based on the chemical composition and its interaction with the refractive index. The model will help in identifying the best regularization parameter (lambda) for the model.
+```{r}
+par(mfrow=c(2,3), mai=c(.6,.6,.4,.4)) 
+plot(glassfit$glm, xvar="lambda")
+```
+The code sets up a 2 by 3 grid of plots and adjusts the margins, then generates a plot showing how the coefficients of the multinomial logistic regression model change with different values of the regularization parameter `lambda`. By visualizing this, we can assess the stability of the coefficients and determine the best `lambda` for the model based on cross-validation performance.
+```{r}
+B  <- coef(glassfit, select="min"); B ## extract coefficients
+```
+The code extracts the coefficients from the fitted model at the point where the regularization parameter lambda minimizes the cross-validation error. The first term (B <- coef(glassfit, select="min")) selects the coefficients corresponding to the lambda value that gives the minimum cross-validation error. The second term (B) simply displays the coefficients at this selected lambda.
+```{r}
+# Access the coefficients for "WinNF" and "WinF"
+B_WinNF <- as.matrix(B[["WinNF"]])  # Coefficients for "WinNF"
+B_WinF <- as.matrix(B[["WinF"]])    # Coefficients for "WinF"
+
+# Calculate the difference for "Mg"
+DeltaBMg <- B_WinNF["Mg", ] - B_WinF["Mg", ]
+DeltaBMg
+```
+The line DeltaBMg <- B["Mg", "WinNF"] - B["Mg", "WinF"]; DeltaBMg; attempts to calculate the difference in coefficients for the variable "Mg" (magnesium) between two response categories, "WinNF" (non-float window glass) and "WinF" (float window glass). It does so by subtracting the coefficient of "Mg" for "WinF" from its coefficient for "WinNF." The result, DeltaBMg, would represent how the effect of "Mg" differs between these two categories in the multinomial model.
+
+This calculation could be useful for understanding how much magnesium contributes to predicting one glass type compared to another.
+```{r}
+exp(DeltaBMg);
+1 - exp(DeltaBMg)
+```
+The first line, exp(DeltaBMg), transforms the difference in coefficients (DeltaBMg) into an odds ratio. In multinomial logistic regression, the coefficients represent log-odds. Exponentiating the difference converts it into an odds ratio, showing how the odds of a glass being in category "WinNF" compared to "WinF" change with a one-unit increase in magnesium.
+The second line, 1 - exp(DeltaBMg), calculates the relative reduction or increase in odds. This result can be interpreted as the proportional change in the odds due to the difference in magnesium's contribution between the two categories.
+These steps help interpret the results in more intuitive terms (odds and proportions). 
+```{r}
+probfgl <- predict(glassfit, xfgl, type="response"); dim(probfgl); head(probfgl,n=2); tail(probfgl,n=2)
+```
+The first part, predict(glassfit, xfgl, type="response"), computes the probabilities for each observation in the design matrix xfgl. The dim(probfgl) line shows the dimensions of the resulting matrix, head(probfgl, n=2) displays the first two rows, and tail(probfgl, n=2) shows the last two rows. This provides a sense of what the predictions look like.
+```{r}
+# Experiment
+# Convert probabilities to predicted classes
+predicted_classes <- apply(probfgl, 1, function(row) colnames(probfgl)[which.max(row)])
+
+# Create a confusion matrix to compare predicted and actual classes
+confusion_matrix <- table(Predicted = predicted_classes, Actual = gtype)
+
+# Calculate overall accuracy
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+
+# Output results
+confusion_matrix
+accuracy
+```
+By running this experiment, I learned how well the multinomial model classifies the observations into their respective glass types. It also demonstrates the usefulness of predicted probabilities for computing class predictions and assessing model performance. If accuracy is low, it may suggest overfitting, class imbalance, or the need for additional features.
+```{r}
+#gives in-sample probabilities. Note: this is nXKX1 array. Need nXK array. To convert:
+dim(probfgl)
+probfgl <- drop(probfgl); 
+n <- nrow(xfgl)
+trueclassprobs <- probfgl[cbind(1:n, gtype)]; head(trueclassprobs,n=3); tail(trueclassprobs,n=3)
+```
+The code refines the structure of probfgl and extracts the probabilities of the actual (true) glass types for each observation. Here's what the different lines do:
+
+The first line, probfgl <- drop(probfgl), removes unnecessary dimensions, converting the probfgl array from 
+nXKX1 to nXKX. The use of dim(probfgl) afterward reaffirms this adjustment.
+The variable n stores the number of observations in xfgl, which is equal to the number of rows in the dataset.
+The line trueclassprobs <- probfgl uses cbind to create an index for each observation's true glass type. It then extracts the probabilities of the true class for each observation from probfgl.
+Finally, head(trueclassprobs, n=3) and tail(trueclassprobs, n=3) display the first and last three true class probabilities to give a preview of the result.
+```{r}
+plot(trueclassprobs ~ gtype, col="green", varwidth=TRUE, xlab="glass type", ylab="prob( true class )")
+```
+The plot command generates a boxplot of trueclassprobs grouped by the levels of gtype. Each box represents the distribution of true class probabilities for a specific glass type.
+The color argument sets the color of the boxes to green.
+varwidth=TRUE makes the widths of the boxes proportional to the square root of the sample size within each group, providing a visual indication of group sizes.
+xlab="glass type" and ylab="prob( true class )" label the x-axis and y-axis, respectively.
+
+This plot allows us to assess the model's confidence in assigning the correct probabilities for each glass type. Ideally, the true class probabilities should cluster near 1 for all glass types, which is only close to true for head, which contains a high level of barium and is therefore unique.
