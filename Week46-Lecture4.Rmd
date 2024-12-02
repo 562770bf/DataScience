@@ -4,7 +4,7 @@ author: "562770bf"
 date: "2024-11-14"
 output: html_document
 ---
-This is the second Readme file for the Data Science and HR analytics course, trying out experiments on the code for lecture 4.
+This is a Readme file for the Data Science and HR analytics course, trying out experiments on the code for lecture 4.
 
 So let's get started. 
 ```{r}
