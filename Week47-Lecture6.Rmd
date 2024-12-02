@@ -1,0 +1,275 @@
+---
+title: "Lecture 6 part one"
+author: "562770bf"
+date: "2024-11-27"
+output: html_document
+---
+This is the Readme file for the Data Science and HR analytics course, trying out experiments on the code for lecture 6.
+
+So let's get started. 
+```{r}
+oj <- read.csv("/Users/annelies2/Downloads/oj.csv")
+basefit <- lm(log(sales) ~ log(price), data=oj)
+coef(basefit)
+brandfit <- lm(log(sales) ~ brand + log(price), data=oj)
+coef(brandfit)
+```
+The second line fits a simple linear regression model, where the logarithm of sales (log(sales)) is modeled as a function of the logarithm of price (log(price)), and stores the model in basefit. The third line retrieves the coefficients from the basefit model, which show the estimated relationship between sales and price on a log-log scale.
+
+The fourth line fits another regression model, brandfit, where log(sales) is modeled as a function of both log(price) and the categorical variable brand. This includes the impact of brand as a factor in addition to the effect of price. The last line retrieves the coefficients of brandfit, which will now include estimates for each brand's effect and for the price elasticity
+```{r}
+pricereg <- lm(log(sales) ~ brand, data=oj)
+phat <- predict(pricereg, newdata=oj)
+presid <- log(oj$price) - phat
+residfit <- lm(log(sales) ~ presid, data=oj)
+coef(basefit)
+```
+This code investigates the relationship between sales, brand, and price by breaking the analysis into steps. It starts with a regression to isolate the effects of brand on sales, then uses residuals from price to refine the modeling.
+```{r}
+#Experiments
+interaction_fit <- lm(log(sales) ~ brand * log(price), data=oj)
+summary(interaction_fit)
+
+nonlinear_fit <- lm(log(sales) ~ log(price) + I(log(price)^2), data=oj)
+summary(nonlinear_fit)
+```
+What the experiments do: Explore whether the relationship between price and sales varies by brand by introducing interaction terms. 
+From the results, we learned that introducing interactions and quadratic terms can significantly enhance the understanding of how price and brand affect sales.
+
+When accounting for interaction terms between brand and price in the first model, the coefficients indicate that the price sensitivity varies by brand. The base effect of price is strongly negative (-3.37753), but the interaction effect for Tropicana (0.66576) partially offsets it, showing that Tropicana sales are less sensitive to price increases compared to the baseline brand. The interaction term for Minute Maid is not statistically significant, suggesting that its price sensitivity is similar to the baseline.
+
+Instead of assuming a linear relationship between log(sales) and log(price), you could experiment with a quadratic term.
+In the second model with a quadratic term for log(price), we see evidence of a nonlinear relationship between price and sales. While the main effect of log(price) is negative (-3.06887), the quadratic term is positive (0.97466), indicating diminishing marginal effects of price reductions or sales increases as prices move farther from the mean. However, the R^2 of approximately 0.2184 suggests this model explains less variation in sales compared to the interaction model.
+
+```{r}
+data <- read.table("/Users/annelies2/Downloads/abortion.dat", skip=1, sep="\t")
+names(data) <- c("state","year","pop","y_viol","y_prop","y_murd",
+	"a_murd","a_viol","a_prop",'prison','police',
+	'ur','inc','pov','afdc','gun','beer')
+
+data <- data[!(data$state%in%c(2,9,12)),]
+data <- data[data$year>84 & data$year<98,] 
+data$pop <- log(data$pop)
+t <- data$year - 85
+s <- factor(data$state)
+
+controls <- data.frame(data[,c(3,10:17)])
+y <- data$y_murd
+d <- data$a_murd
+summary(orig <- glm(y ~ d + t + s +., data=controls) )$coef['d',]
+dcoef <- summary(orig <- glm(y ~ d + t + s +., data=controls) )$coef['d',][1]
+exp(dcoef) - 1
+```
+The tenth line fits a generalized linear model (GLM) using the formula that includes the treatment variable, time variable, state factor, and the control variables. The summary of this model is accessed, and the coefficient for the treatment variable (d) is extracted. The variable dcoef stores the estimated coefficient for the treatment variable, which reflects the effect of the treatment on the dependent variable. The last line computes the percentage change in the dependent variable associated with a unit increase in the treatment variable by exponentiating the coefficient and subtracting 1. This gives a measure of the relative effect of abortion rates on murder rates, expressed as a percentage.
+
+```{r}
+cell <- read.csv("/Users/annelies2/Downloads/us_cellphone.csv")
+cellrate <- 5*cell[,2]/(1000*cell[,3]) 
+```
+ The formula 5 * cell[,2] / (1000 * cell[,3]) calculates the cell phone rate. 
+The second block of code sets the margins of the plotting area using the par function, allowing for more control over the layout of the plot.
+```{r}
+par(mai=c(.9,.9,.1,.1))
+plot(1985:1997, tapply(d, t, mean), bty="n", xlab="year", ylab="rate", pch=21, bg=2)
+points(1985:1997, cellrate, bg=4, pch=21)
+legend("topleft", fill=c(2,4), legend=c("abortions","cellphones"), bty="n")
+```
+The overall goal of this code is to visually compare the rates of abortions and cell phone usage over time, helping to analyze any potential correlation between the two trends.
+```{r}
+phone <- cellrate[ t + 1 ]
+tech <- summary(glm(y ~ phone + t + s +., data=controls))$coef['phone',]
+phonecoef <- tech[1]
+exp(phonecoef) - 1
+```
+The code performs a regression analysis to estimate the relationship between the calculated cell phone rates and a dependent variable y, likely representing some form of count or measurement related to abortion rates or another related outcome. The exponential of the coefficient (exp(phonecoef)) transforms the estimate from the log scale back to the original scale, as the dependent variable y was likely modeled on a logarithmic scale. The subtraction of 1 (exp(phonecoef) - 1) gives the percentage change in the outcome variable for a one-unit increase in the cell phone rate.
+```{r}
+# Experiment: Include a different predictor or adjust phone variable
+# Assuming controls has additional relevant variables
+phone <- cellrate[t + 1]  # Extract phone rates based on the adjusted index
+# Modifying the model by adding an interaction term or including a new variable from controls
+tech <- summary(glm(y ~ phone * t + s + ., data=controls))$coef['phone',]  # Adding interaction with time
+phonecoef <- tech[1]
+exp(phonecoef) - 1  # Calculate the percentage change
+```
+From the previous experiment, where you examined the coefficients from the generalized linear model, you learned that the estimate for the variable d is approximately -0.1698, while the estimate for the interaction between phone and another variable is about 0.3221. Overall, this experiment illustrates the importance of model specification in regression analysis. It highlights how including interactions or additional predictors can significantly alter the interpretation of relationships among variables
+```{r}
+t <- factor(t)
+interact <- glm(y ~ d + t + phone*s + .^2, data=controls)
+summary(interact)$coef["d",]
+```
+The line that assigns t to factor(t) transforms t into a factor variable. This indicates that t should be treated as a categorical variable rather than a continuous one, allowing the model to estimate separate effects for each level of t.
+Fitting the GLM: The glm function is used to fit the model, where y is the dependent variable, and the predictors include:
+d: This is the main independent variable of interest.
+t: The time variable, now treated as a factor.
+phone: The calculated cell phone rates.
+s: This likely represents a factor variable, such as state.
+.^2: This notation indicates that all variables in the data frame should be included in the model, along with their interactions (squared terms).
+```{r}
+library(gamlr)
+## refactor state to have NA reference level
+sna <- factor(s, levels=c(NA,levels(s)), exclude=NULL)
+x <- sparse.model.matrix( ~ t + phone*sna + .^2, data=controls)[,-1]
+dim(x)
+## naive lasso regression
+naive <- cv.gamlr(cbind(d,x),y); head(coef(naive))
+coef(naive)["d",]
+```
+The dimensions of x being 624 by 143 indicate a relatively high number of predictors relative to the number of observations. This highlights the importance of variable selection techniques like lasso to ensure that the model remains interpretable and generalizable.
+```{r}
+treat <- cv.gamlr(x,d, lmr=1e-3); head(summary(treat))
+predtreat <- predict(treat, x, select="min"); head(predtreat)
+dhat <- drop(predtreat); length(dhat)
+```
+The first line runs a cross-validated lasso regression model (cv.gamlr) using the matrix x and the response variable d. The lmr=1e-3 parameter sets a small value for the regularization term, which controls the amount of shrinkage applied to the coefficients. This model is likely being used to assess how well the predictors explain the variability in d.
+The second line retrieves a summary of the lasso regression model. The head function is used to display the first few lines of the summary output, which includes information about the fitted model, such as coefficient estimates, standard errors, and statistical significance.
+The third line generates predictions from the fitted lasso model using the original predictor matrix x. The select="min" argument indicates that the predictions should be based on the model with the minimum cross-validated error. The head function displays the first few predictions.
+The fourth line uses drop(predtreat) to convert the predictions into a standard vector format by removing any sparse matrix formatting. This ensures that the predictions are in a more manageable and interpretable form. The length(dhat) function then returns the number of predictions generated.
+```{r}
+# Experiment: Change the regularization parameter to observe its impact
+treat_experiment <- cv.gamlr(x, d, lmr=1e-2)  # Increased regularization
+summary_experiment <- summary(treat_experiment)
+predtreat_experiment <- predict(treat_experiment, x, select="min")
+dhat_experiment <- drop(predtreat_experiment)
+
+# Output the results of the experiment
+head(summary_experiment)
+head(predtreat_experiment)
+length(dhat_experiment)
+```
+Increasing regularization often leads to more coefficients being shrunk towards zero, potentially leading to a simpler model. The lambda values for the segments remain relatively close between the two experiments, with slight variations. The change in R2 for the later segments indicates a decrease in performance in the new experiment compared to the old.
+```{r}
+par(mai=c(.9,.9,.1,.1))
+plot(dhat,d,bty="n",pch=21,bg=8, cex=.8, yaxt="n")
+axis(2, at=c(0,1,2,3))
+```
+The provided code snippet creates a scatter plot using the predicted values (dhat) against the actual values (d) while customizing the plot's margins and axes
+The first function sets the margins of the plot and the second line plots the scatterplot. The last line adds custom tick marks to the y-axis.
+```{r}
+## IS R^2?
+cor(drop(dhat),d)^2 #Correlation almost 1, less interesting basically same variation
+## Note: IS R2 indicates how much independent signal you have for estimating
+coef(summary( glm( y ~ d + dhat) ))
+# re-run lasso, with this (2nd column) included unpenalized (free=2)
+causal <- cv.gamlr(cbind(d,dhat,x),y,free=2,lmr=1e-3)
+coef(causal, select="min")["d",]
+# AICc says abortion rate has no causal effect on crime.
+```
+An R² close to 1 indicates a strong linear relationship, suggesting that the variation in d is well explained by dhat. However, it also implies that if dhat and d are very similar, it may not be as interesting for causal inference.
+The glm model is used to assess the impact of d (abortion rate) and dhat (predicted values) on y (crime rate). The output shows coefficients, where the coefficient for d is 0.2862281 but not statistically significant (p-value = 0.5477543). This suggests that abortion rates may not have a significant effect on crime rates in your data.
+Using cv.gamlr incorporates d and dhat into the model while allowing d to remain unpenalized. The output shows that the estimate for d remains relatively small, suggesting limited or no causal impact on y.
+
+Abortion rate does not appear to have a statistically significant causal effect on crime rates in this context. The strong correlation between d and the predicted values reflects redundancy rather than independent explanatory power. The models also highlight the importance of variable selection and the potential for interaction effects when analyzing social phenomena.
+```{r}
+#Experiment
+# Create interaction terms between abortion rate and relevant socioeconomic factors
+controls$pop_squared <- controls$pop^2  # Adding a quadratic term for population
+controls$inc_squared <- controls$inc^2   # Adding a quadratic term for income
+
+# Construct the model matrix with interaction terms
+x <- sparse.model.matrix(~ d * (pop + inc + ur + pov + afdc + gun + beer) + pop_squared + inc_squared + t + s, data=controls)[,-1]
+
+# Run Lasso regression
+lasso_model <- cv.gamlr(cbind(d, x), y, lmr=1e-3)
+
+# Examine the coefficients
+coef(lasso_model, select="min")
+```
+Intercept: The intercept is approximately 0.728. This represents the estimated crime rate when all predictors are at their reference levels, indicating a baseline level of crime in the absence of the effects from the independent variables.
+Abortion Rate (d): The coefficient for d is approximately -0.0457, suggesting a negative relationship between the abortion rate and crime rates. However, the magnitude of this coefficient is small, indicating a modest effect, and it is essential to consider its statistical significance in context. 
+Population (pop): The coefficient for pop is approximately 0.414, indicating that as population increases, the crime rate is expected to increase, holding other variables constant. This aligns with expectations in criminology, where larger populations can lead to higher crime rates due to greater opportunities for crime.
+Income (inc): The coefficient is approximately -0.493, suggesting an inverse relationship between income and crime rates. Higher income is associated with lower crime rates, consistent with the theory that higher socioeconomic status can reduce crime.
+Urbanization Rate (ur): The coefficient for urbanization is -1.144, indicating that higher levels of urbanization are associated with lower crime rates. This could reflect the complexities of urban life, where increased surveillance and community structures might reduce crime.
+Poverty Rate (pov): The coefficient is very small (approximately 0.0053), suggesting that changes in poverty rates have a negligible effect on crime rates in this model.
+Gun Ownership (gun) and Beer Consumption (beer): The coefficients for these variables are positive (0.0467 and 0.0053, respectively), indicating that higher gun ownership and beer consumption are associated with increased crime rates. This may reflect the potential for substance-related crimes or violent crimes related to firearms.
+Interaction Terms:
+The interaction between d and ur has a coefficient of approximately 4.329, which suggests that the impact of abortion rates on crime may be significantly moderated by the level of urbanization. This high positive coefficient indicates that in more urbanized areas, the effect of abortion on crime rates might be pronounced.
+
+```{r}
+library(gamlr)
+data(hockey)
+head(goal, n=2)
+player[1:2, 2:7] #players on ice. +1 is home players. 0 is off ice.
+team[1, 2:6] #Sparse Matrix with indicators for each team*season interaction: +1 for home team, -1 for away team
+config[5:6, 2:7] #Special teams info. For example, S5v4 is a 5 on 4 powerplay,  +1 if it is for the home-team and -1 for the away 
+```
+The head() function is used to display the first two rows of the goal data frame. 
+The next code displays the first two rows and columns 2 to 7 of the player data frame. 
+The line after retrieves the first row and columns 2 to 6 of the team matrix. 
+This command displays rows 5 and 6 and columns 2 to 7 of the config data frame, which likely contains special teams information. For example: S5v4 refers to a situation with five players on ice for the home team versus four for the away team. 
+```{r}
+x <- cbind(config,team,player)
+y <- goal$homegoal
+fold <- sample.int(2,nrow(x),replace=TRUE)
+head(fold)
+```
+The first line combines the config, team, and player data frames or matrices into a single matrix x. 
+Next, we are defining the response variable y, which represents the number of home goals scored. It is likely a binary outcome (1 for a goal, 0 for no goal).
+The next part of the code randomly assigns each observation in the dataset to one of two folds (1 or 2) for cross-validation. The sample.int() function is used to create this assignment, and head(fold) displays the first few assignments. This random assignment is essential for validating the model’s performance on unseen data
+```{r}
+nhlprereg <- gamlr(x[fold==1,], y[fold==1],
+free=1:(ncol(config)+ncol(team)),
+family="binomial", standardize=FALSE)
+selected <- which(coef(nhlprereg)[-1,] != 0)
+xnotzero <- as.data.frame(as.matrix(x[,selected]))
+nhlmle <- glm( y ~ ., data=xnotzero,subset=which(fold==2), family=binomial )
+```
+```{r}
+summary(nhlmle)
+```
+On the first line, we fit a generalized additive model with a Lasso penalty (using the gamlr package) on the training set (where fold==1).
+x[fold==1, ] selects the training data for the model.
+y[fold==1] selects the corresponding response variable for the training data.
+The second line indicates which coefficients are not penalized during the Lasso regression. Typically, you may want to free the coefficients related to specific variables (in this case, all variables in config and team).
+The third line specifies that you are performing logistic regression.
+standardize=FALSE indicates that the predictors should not be standardized before fitting the model.
+
+After fitting the model, the selected specification identifies the indices of the coefficients that are not equal to zero. The coef(nhlprereg) function retrieves the coefficients from the fitted model, and [-1, ] excludes the intercept term. This gives us the indices of the predictors that are significant according to the Lasso regression, from which we create a new dataframe.
+
+Finally, we fit a generalized linear model (GLM) using the selected predictors from xnotzero on the validation set (where fold==2). This is the final model that will be used to predict home goals based on the significant predictors.
+
+```{r}
+x[1,x[1,]!=0] #check first observation for players on the ice
+fit <- predict(nhlmle, xnotzero[1,,drop=FALSE], type="response", se.fit=TRUE)$fit; fit
+se.fit <- predict(nhlmle, xnotzero[1,,drop=FALSE], type="response", se.fit=TRUE)$se.fit; se.fit
+CI = fit + c(-2,2)*se.fit
+CI #90% confidence interval for probability that Edmonton scored the goal is
+```
+The code uses a generalized linear model (GLM) to predict the probability of a goal being scored by a hockey team, in this case, Edmonton, based on certain predictor variables.
+
+The first line checks the first observation in the dataset to identify which players were on the ice at that time by filtering out zeros in the relevant variable. The predict function is then called twice on the fitted model nhlmle. The first call retrieves the predicted probability of scoring a goal for the specified observation, while the second call retrieves the standard error of that prediction. A 90% confidence interval for the probability is calculated using the predicted value and its standard error.
+
+The outputs you see following that include estimates and statistical results from a GLM. For instance, the coefficients table indicates the estimated effect of various predictors on the outcome, along with their standard errors, z-values, and associated p-values. This helps assess which predictors significantly contribute to the goal-scoring probability.
+```{r}
+#Experiment
+# Step 1: Identify players on the ice
+players_on_ice <- x[2, x[2, ] != 0]
+
+# Step 2: Create a new input for the model excluding certain players
+# Start with the current observation
+new_input <- x[2, ] 
+
+# Set specific players to -1 to indicate they are not on the ice
+new_input[c("DERIAN_HATCHER", "MARTY_TURCO")] <- -1 
+
+# Convert the new input to a data frame
+new_input_df <- as.data.frame(t(new_input)) # Transpose to create a single row data frame
+colnames(new_input_df) <- colnames(x) # Ensure column names match the original input
+
+# Step 3: Predict scoring probability with the modified input
+fit <- predict(nhlmle, newdata = new_input_df, type = "response", se.fit = TRUE)$fit
+se.fit <- predict(nhlmle, newdata = new_input_df, type = "response", se.fit = TRUE)$se.fit
+
+# Step 4: Calculate confidence intervals
+CI <- fit + c(-2, 2) * se.fit
+
+# Display results
+fit
+se.fit
+CI # This shows the 90% confidence interval for scoring probability
+
+```
+The estimated probability of scoring decreased from approximately 0.5859 to 0.5260 when specific players (e.g., DERIAN HATCHER and MARTY TURCO) were removed from the ice. This suggests that their absence has a negative impact on Dallas's likelihood of scoring.
+
+The standard error increased slightly from 0.0636 to 0.0693. A higher standard error indicates greater uncertainty in the estimated probability, which may reflect the variability in the data or the specific player combinations considered.
+
+The confidence interval for the new experiment is [0.3874392, 0.6644761], which is narrower than the old results' interval of [0.4586339, 0.7131108].
