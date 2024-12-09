@@ -1,0 +1,169 @@
+---
+title: "Week44/45 Lecture 2"
+author: "562770bf"
+date: "2024-11-4"
+output: html_document
+---
+This is the Rmd file for the Data Science and HR analytics course, trying out experiments on the code for week 44 and 45 lecture 2.
+
+So let's get started. 
+```{r}
+browser <- read.csv("/Users/annelies2/Downloads/web-browsers.csv")
+dim(browser)
+head(browser)
+```
+This code reads a CSV file into R, displays its dimensions (number of rows and columns), and shows the first six rows of the data.
+```{r}
+mean(browser$spend); var(browser$spend)/1e4; sqrt(var(browser$spend)/1e4)
+  B <- 1000
+  mub <- c()
+  for (b in 1:1000){
+    samp_b <- sample.int(nrow(browser), replace=TRUE)
+    mub <- c(mub, mean(browser$spend[samp_b]))
+  }
+  sd(mub)
+```
+This code performs a bootstrap resampling procedure 1000 times to estimate the mean of the `spend` variable in the `browser` data frame and then calculates the standard deviation of the resampled means.
+```{r}
+# Experiment 1: Varying the number of bootstrap samples (B)
+B_values <- c(500, 1000, 5000)  # Different values for B
+for (B in B_values) {
+  mub <- c()
+  for (b in 1:B) {
+    samp_b <- sample.int(nrow(browser), replace=TRUE)
+    mub <- c(mub, mean(browser$spend[samp_b]))
+  }
+  cat("B =", B, "SD of bootstrap means:", sd(mub), "\n")
+}
+# Experiment 2: Using sample() instead of sample.int() for resampling
+B <- 1000
+mub <- c()
+for (b in 1:B) {
+  samp_b <- sample(1:nrow(browser), size=nrow(browser), replace=TRUE)  # Random resampling
+  mub <- c(mub, mean(browser$spend[samp_b]))
+}
+cat("SD of bootstrap means with sample() method:", sd(mub), "\n")
+# Experiment 3: Calculate a 95% confidence interval from bootstrap means
+B <- 1000
+mub <- c()
+for (b in 1:B) {
+  samp_b <- sample.int(nrow(browser), replace=TRUE)
+  mub <- c(mub, mean(browser$spend[samp_b]))
+}
+
+# Confidence interval
+CI <- quantile(mub, c(0.025, 0.975))  # 95% confidence interval
+cat("95% Confidence Interval:", CI, "\n")
+# Experiment 4: Compare bootstrap means to actual mean
+actual_mean <- mean(browser$spend)  # Actual mean of the 'spend' variable
+cat("Actual mean:", actual_mean, "\n")
+
+B <- 1000
+mub <- c()
+for (b in 1:B) {
+  samp_b <- sample.int(nrow(browser), replace=TRUE)
+  mub <- c(mub, mean(browser$spend[samp_b]))
+}
+
+# Compare bootstrap mean to actual mean
+bootstrap_mean <- mean(mub)
+cat("Bootstrap mean:", bootstrap_mean, "\n")
+```
+From the experiments, I learned that:
+
+Increasing the number of bootstrap samples tends to reduce the variability in the resampled means, which results in a more stable and reliable estimate of the population mean. As `B` increases, the standard deviation of the bootstrap means generally decreases.
+   
+Using `sample()` instead of `sample.int()` for resampling produced nearly identical results in terms of the standard deviation of the bootstrap means, indicating that both methods can be used interchangeably for resampling in this case.
+
+Bootstrap confidence intervals provide a range of plausible values for the population mean, offering valuable insights into the uncertainty around the estimate. A 95% confidence interval based on bootstrap resampling captures the variability in the data and can help assess the precision of the mean estimate.
+
+The bootstrap mean was very close to the actual population mean of the `spend` variable, demonstrating that the bootstrap method is effective in approximating population parameters even with limited data.
+```{r}
+  h <- hist(mub)
+  xfit <- seq(min(mub), max(mub), length = 40) 
+  yfit <- dnorm(xfit, mean = mean(browser$spend), sd = sqrt(var(browser$spend)/1e4)) 
+  yfit <- yfit * diff(h$mids[1:2]) * length(mub) 
+  lines(xfit, yfit, col = "black", lwd = 2)
+```
+First line creates a histogram of the bootstrap sample means (mub) and stores it in the object h. This helps visualize the distribution of the bootstrap means.
+Xfit generates a sequence of 40 evenly spaced points (xfit) between the minimum and maximum values of the mub vector. These points will be used to evaluate the fitted normal distribution.
+Yfit calculates the probability density values of the normal distribution (dnorm) at each point in xfit, assuming a normal distribution with the mean and adjusted standard deviation based on the original.
+Fourth line scales the normal density to match the histogram's area:
+diff(h$mids[1:2]): The width of a histogram bin, ensuring the density matches the width of the bars in the histogram.
+length(mub): Adjusts the density for the total number of bootstrap samples to scale the normal curve appropriately to match the histogram's total count.browser$spend data.
+Fifth line adds the fitted normal curve to the histogram, using the calculated points (xfit, yfit) and styling it as a black line with a width of 2.
+```{r}
+B <- 1000
+  betas <- c()
+  for (b in 1:1000){
+    samp_b <- sample.int(nrow(browser), replace=TRUE)
+    reg_b <- glm(log(spend) ~ broadband + anychildren, data=browser[samp_b,])
+    betas <- rbind(betas, coef(reg_b))
+  }; head(betas, n=3)
+  cov(betas[,"broadband"], betas[,"anychildren"])
+```
+This code performs a bootstrap resampling procedure to estimate the distribution of the coefficients in a regression model. It resamples the data 1000 times, fits a logistic regression model (glm) on each sample, and stores the estimated coefficients (betas). The final part calculates the covariance between the coefficients for the broadband and anychildren variables.
+```{r}
+B <- 2000  # Increase the number of bootstrap samples
+betas <- c()
+for (b in 1:B) {
+  samp_b <- sample.int(nrow(browser), replace=TRUE)
+  reg_b <- glm(log(spend) ~ broadband + anychildren, data=browser[samp_b,])
+  betas <- rbind(betas, coef(reg_b))
+}
+cov(betas[,"broadband"], betas[,"anychildren"])
+```
+What I learned from this experiment is that increasing the number of bootstrap samples improves the precision of the coefficient estimates. By calculating the covariance between the coefficients, you can also understand the relationship between the predictors (broadband and anychildren). The higher the number of bootstrap samples, the more reliable the covariance estimate becomes.
+
+```{r}
+browser <- read.csv("/Users/annelies2/Downloads/web-browsers.csv")
+spendy <- glm(log(spend) ~ . -id, data=browser)
+round(summary(spendy)$coef,2)
+```
+This code fits a generalized linear model (glm) to the browser dataset, predicting the log of the spend variable using all the other variables in the dataset except for id. The summary(spendy)$coef part extracts the coefficients from the fitted model, and round(..., 2) rounds them to two decimal places for easier interpretation.
+```{r}
+#Experiment 1
+browser <- read.csv("/Users/annelies2/Downloads/web-browsers.csv")
+colnames(browser)
+spendy <- glm(log(spend) ~ broadband + anychildren + race + region, data=browser)
+round(summary(spendy)$coef, 2)
+```
+What I learned from this experiment is that when fitting a regression model, you can control which predictors you include by specifying them in the formula (log(spend) ~ broadband + anychildren + income + age). By including only relevant variables, you can assess how each one affects the dependent variable (spend), which is being modeled here as its log transformation. This is helpful for understanding the relationship between spend and other factors such as broadband, anychildren, income, and age.
+```{r}
+  pval <- summary(spendy)$coef[-1, "Pr(>|t|)"]
+  pvalrank <- rank(pval)
+  reject <- ifelse(pval< (0.1/9)*pvalrank, 2, 1) 
+  png(file = "/Users/annelies2/Downloads/BHAlgoExample.png", width = 600, height = 350)
+  plot(pvalrank, pval, ylab="p-value", xlab="p-value rank", pch=16, col=reject)
+  lines(pvalrank, (0.1/9)*pvalrank)
+  dev.off()
+```
+This code implements the Benjamini-Hochberg (BH) procedure for controlling the false discovery rate (FDR) in multiple hypothesis testing. It first extracts the p-values from the regression model (spendy) and ranks them. Then, it calculates whether each p-value should be rejected based on the BH procedure (with a threshold of (0.1/9)*pvalrank). The plot visualizes the p-values and their ranks, with points colored based on whether they are rejected (2) or not (1).
+```{r}
+#Experiment 2
+pval <- summary(spendy)$coef[-1, "Pr(>|t|)"]
+pvalrank <- rank(pval)
+reject <- ifelse(pval < (0.05/6)*pvalrank, 2, 1)  
+png(file = "/Users/annelies2/Downloads/BHAlgoExample.png", width = 600, height = 350)
+plot(pvalrank, pval, ylab="p-value", xlab="p-value rank", pch=16, col=reject)
+lines(pvalrank, (0.05/6)*pvalrank, col="blue")
+dev.off()
+```
+What I learned from this experiment is that the Benjamini-Hochberg procedure adjusts the significance threshold based on the rank of the p-values, allowing more p-values to be considered significant while controlling for the false discovery rate. The plot helps visualize how the p-values and ranks interact and provides insight into which variables are likely to be significant after applying the correction. By changing the threshold (e.g., from 0.1 to 0.05), you can adjust the stringency of the test.
+
+```{r}
+SC <- read.csv("/Users/annelies2/Downloads/semiconductor.csv")
+dim(SC)
+full <- glm(FAIL ~ ., data=SC, family=binomial)
+pvals <- summary(full)$coef[-1,4]
+```
+This code reads in a CSV file (semiconductor.csv) into a data frame called SC and then displays the dimensions of the dataset using dim(SC), which shows the number of rows and columns. After that, it fits a generalized linear model (glm) to the data with a binomial family, using the variable FAIL as the dependent variable and all other variables (.) as predictors. The model is a logistic regression, as indicated by the binomial family.
+Next, the code extracts the p-values for each predictor variable (excluding the intercept) using summary(full)$coef[-1,4]. These p-values indicate the statistical significance of each predictor in explaining the variation in FAIL.
+```{r}
+hist(pvals, xlab="p-value", main="", col="lightblue")
+```
+The code creates a histogram of the `pvals` vector, which contains p-values from the logistic regression model. It labels the x-axis as "p-value", sets an empty title for the plot, and uses a light blue color for the bars in the histogram. This visualization helps to understand the distribution of p-values from the model's coefficients.
+```{r}
+fdr_pvals <- p.adjust(pvals, method = "fdr")
+```
+The function fdr_cut(pvals) is likely intended to apply the False Discovery Rate (FDR) correction to the p-values in the pvals vector. The FDR correction is commonly used to adjust for multiple comparisons and reduce the likelihood of Type I errors (false positives) when performing many statistical tests.
