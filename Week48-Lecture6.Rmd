@@ -1,0 +1,388 @@
+---
+title: "Lecture 6 part two"
+author: "562770bf"
+date: "2024-12-02"
+output: html_document
+---
+This is the Readme file for the Data Science and HR analytics course, trying out experiments on the code for lecture 6.
+
+So let's get started. 
+```{r}
+data <- read.table("/Users/annelies2/Downloads/abortion.dat", skip=1, sep="\t")
+names(data) <- c("state","year","pop","y_viol","y_prop","y_murd",
+	"a_murd","a_viol","a_prop",'prison','police',
+	'ur','inc','pov','afdc','gun','beer')
+
+data <- data[!(data$state%in%c(2,9,12)),]
+data <- data[data$year>84 & data$year<98,] 
+data$pop <- log(data$pop)
+t <- data$year - 85
+s <- factor(data$state)
+
+controls <- data.frame(data[,c(3,10:17)])
+y <- data$y_murd
+d <- data$a_murd
+summary(orig <- glm(y ~ d + t + s +., data=controls) )$coef['d',]
+dcoef <- summary(orig <- glm(y ~ d + t + s +., data=controls) )$coef['d',][1]
+exp(dcoef) - 1
+
+cell <- read.csv("/Users/annelies2/Downloads/us_cellphone.csv")
+cellrate <- 5*cell[,2]/(1000*cell[,3]) 
+
+phone <- cellrate[ t + 1 ]
+tech <- summary(glm(y ~ phone + t + s +., data=controls))$coef['phone',]
+phonecoef <- tech[1]
+exp(phonecoef) - 1
+
+t <- factor(t)
+interact <- glm(y ~ d + t + phone*s + .^2, data=controls)
+summary(interact)$coef["d",]
+
+library(gamlr)
+## refactor state to have NA reference level
+sna <- factor(s, levels=c(NA,levels(s)), exclude=NULL)
+x <- sparse.model.matrix( ~ t + phone*sna + .^2, data=controls)[,-1]
+dim(x)
+```
+
+
+```{r}
+source("/Users/annelies2/Downloads/orthoML.R")
+dreg <- function(x,d){ cv.gamlr(x, d, lmr=1e-5) }
+
+yreg <- function(x,y){ cv.gamlr(x, y, lmr=1e-5) }
+
+resids <- orthoPLTE( x=x, d=d, y=y, 
+				dreg=dreg, yreg=yreg, nfold=5)
+```
+The dreg function uses the gamlr function to create a regularized model that predicts treatment d from features x, with cross-validation for tuning. Similarly, yreg predicts the outcome y from x.
+
+```{r}
+head(resids$dtil)
+head(resids$ytil)
+2*pnorm(-abs(resids$gam)/resids$se) #p-value supports no effect of abortion access on crime
+```
+The orthoLTE function in the sourced file performs Orthogonal ML. It begins by splitting the data into folds for cross-validation. In each fold, it trains the treatment and outcome models (dreg and yreg) on the training data and predicts the treatment and outcome for the test data. It computes residuals for treatment and outcome (orthogonalizing them) and stores these in dtil and ytil. Finally, it fits a linear model using the residuals to estimate the effect of the treatment on the outcome (gamma) and calculates its standard error.
+
+```{r}
+# Experiment 
+source("/Users/annelies2/Downloads/orthoML.R")
+dreg <- function(x,d){ cv.gamlr(x, d, lmr=1e-5) }
+
+yreg <- function(x,y){ cv.gamlr(x, y, lmr=1e-5) }
+
+resids <- orthoPLTE( x=x, d=d, y=y, 
+				dreg=dreg, yreg=yreg, nfold=10)  #changing the number of folds
+
+head(resids$dtil)
+head(resids$ytil)
+2*pnorm(-abs(resids$gam)/resids$se) 
+```
+This experiment changes the number of folds from 5 to 10. The results (gamma, standard error, p-value, and residuals) are influenced by the fold structure. Using more folds can increase variability in estimates but might better capture finer patterns in the data.
+A smaller number of folds provides more observations per fold for training, reducing variance in estimates. More folds reduce bias but increase variance, affecting the precision of the treatment effect.
+
+```{r}
+library(foreign)
+
+descr <- read.dta("/Users/annelies2/Downloads/oregonhie_descriptive_vars.dta")
+prgm <- read.dta("/Users/annelies2/Downloads/oregonhie_stateprograms_vars.dta")
+s12 <- read.dta("/Users/annelies2/Downloads/oregonhie_survey12m_vars.dta")
+
+# nicely organized, one row per person
+all(s12$person_id == descr$person_id)
+all(s12$person_id == prgm$person_id)
+
+P <- descr[,c("person_id","household_id", "numhh_list")]
+P$medicaid <- as.numeric(prgm[,"ohp_all_ever_firstn_30sep2009"]=="Enrolled")
+P$selected <- as.numeric(descr[,"treatment"]=="Selected")
+levels(P$numhh_list) <- c("1","2","3+")
+
+# 12 month is the survey that really matters
+# need to control for household size interacted with survey return time
+Y <- s12[,c("weight_12m",
+	"doc_any_12m","doc_num_mod_12m",
+	"er_any_12m","er_num_mod_12m",
+	"hosp_any_12m","hosp_num_mod_12m")]
+Y$doc_any_12m <- as.numeric(Y$doc_any_12m=="Yes")
+Y$er_any_12m <- as.numeric(Y$er_any_12m=="Yes")
+Y$hosp_any_12m <- as.numeric(Y$hosp_any_12m=="Yes")
+
+# smk_ever_12m - num19_12m are sources of heterogeneity, plus descr
+X <- s12[,121:147]
+X$dt_returned <- factor(format(s12$dt_returned_12m, "%Y-%m"))
+
+insurv <- which(s12$sample_12m_resp == "12m mail survey responder")
+X <- X[insurv,]
+Y <- Y[insurv,]
+P <- P[insurv,]
+
+sapply(Y,function(y) sum(is.na(y)))
+nomiss <- which( !apply(Y,1, function(y) any(is.na(y))) )
+X <- X[nomiss,]
+Y <- Y[nomiss,]
+P <- P[nomiss,]
+
+# pull out the weights and attach doc_any to P
+weights <- Y[,1]
+Y <- Y[,-1]
+
+# replace some ridiculous values in survey and drop num19
+X$hhsize_12m[X$hhsize_12m>10] <- 10
+X$num19_12m <- NULL
+
+# organize to make it pretty for text
+P$doc_any_12m <- Y$doc_any_12m # you can explore other responses if you want
+P <- P[,c(1,2,6,5,4,3)]
+names(P)[6] <- "numhh"
+
+################## basic diffs in mean
+
+head(P)
+dim(P)
+table(P$selected)
+```
+The head command shows the first six rows of the dataset. The dim command shows the dimensions of the P dataset as a numeric vector, where the first number is the number of rows (observations) and the second number is the number of columns (variables). This line creates a frequency table for the selected variable, showing how many individuals were selected versus not selected for treatment.
+
+```{r}
+ybar <- tapply(P$doc_any_12m, P$selected, mean)
+( ATE = ybar['1'] - ybar['0'] )
+```
+This code calculates the Average Treatment Effect (ATE) of the treatment variable (selected) on the outcome variable (doc_any_12m).
+Tapply computes the mean of the outcome variable (whether someone visited a doctor in the last year) separately for each value of the treatment variable selected (1 for selected, 0 for not selected). The result is a named vector with the mean for each group.
+The second line of code calculates the difference in means between the treated group (selected = 1) and the control group (selected = 0). This difference represents the Average Treatment Effect (ATE), which is the causal effect of treatment on the outcome.
+
+```{r}
+#Experiment
+# add in column
+P$er_any_12m <- Y$er_any_12m 
+# Calculate the average treatment effect for ER visits
+ybar_er <- tapply(P$er_any_12m, P$selected, mean, na.rm = TRUE)  # Set na.rm = TRUE to ignore NAs
+ATE_er <- ybar_er['1'] - ybar_er['0']  # Average Treatment Effect
+
+# Output the result
+print(ATE_er)
+
+```
+The value -0.002527142 indicates a very small negative effect associated with the treatment. A possible  reason for this small (negative) effect could be that people only go to the ER that actually need urgent medical help and randomly becoming health insurance might not have a major impact on the probability that one is seriously injured (Doubt: is this theory likely to be true, since Americans go to the ER as they have to be helped there?). 
+
+```{r}
+nsel <- table(P[,c("selected")])
+yvar <- tapply(P$doc_any_12m, P$selected, var)
+( seATE = sqrt(sum(yvar/nsel)) )
+ATE + c(-2,2)*seATE
+```
+
+This code calculates the standard error and confidence interval for the Average Treatment Effect (ATE) of the treatment on doc_any_12m. Nsel calculates the number of observations in each group (treatment = 1 and control = 0) based on the selected variable. Yvar computes the variance of the outcome variable (doc_any_12m) separately for the treatment and control groups. seATE calculates the standard error of the ATE. The formula sums the variances of the two groups divided by their respective sample sizes, then takes the square root. This accounts for the variability of the outcome within each group and the sample size. Last line calculates a 95% confidence interval for the ATE. It adds and subtracts approximately two standard errors (seATE) from the ATE to provide the interval.
+
+The standard error suggests that the estimate of the ATE is quite precise (small variability). The confidence interval provides a range for the ATE, reflecting the possible effect of the treatment while accounting for sampling uncertainty.
+
+```{r}
+lin <- glm(doc_any_12m ~ selected + numhh, data=P);
+round( summary(lin)$coef["selected",],4) # 6-7% increase in prob
+```
+
+This code fits a logistic regression model and extracts and summarizes the coefficient of interest. 
+
+Lin creates a logistic regression model using the doc_any_12m variable as the dependent variable. The predictors are selected (indicating treatment status) and numhh (household size). The glm function automatically assumes a logistic regression model if doc_any_12m is a binary variable.
+
+The second line extracts the summary statistics for the selected variable's coefficient from the regression output, rounding each value to four decimal places. 
+
+```{r}
+levels(X$edu_12m)
+source("/Users/annelies2/Downloads/naref.R")
+levels(naref(X$edu_12m))
+X <- naref(X) #makes NA the base group
+```
+This code prepares the edu_12m variable in the dataset by managing its factor levels, particularly addressing missing values. The levels(X$edu_12m) line displays the unique levels of the factor variable education. The output shows four distinct categories of education.
+This naref file likely contains the function naref, which is designed to modify factor variables, particularly handling missing values.
+The levels(naref(X$edu_12m)) line applies the naref function to edu_12m and retrieves the new factor levels. The output includes the original education categories but also incorporates NA as a valid level, making it the base group.
+The X <- naref(X) line applies the naref function to the entire dataset `X`. This function modifies all factor variables in the dataset, likely ensuring that missing values are treated consistently as a reference level across all relevant factors.
+
+The process effectively prepares the data for regression analysis or other statistical methods that use factors. By treating missing values as a reference group, the analysis can explicitly account for missingness rather than excluding such cases.
+
+```{r}
+xnum <- X[,sapply(X,class)%in%c("numeric","integer")]
+xnum[66:70,]
+colSums(is.na(xnum))   
+# flag missing
+xnumna <- apply(is.na(xnum), 2, as.numeric)
+xnumna[66:70,]
+# impute the missing values
+mzimpute <- function(v){
+if(mean(v==0,na.rm=TRUE) > 0.5) impt <- 0
+else impt <- mean(v, na.rm=TRUE)
+v[is.na(v)] <- impt
+return(v) }
+xnum <- apply(xnum, 2, mzimpute)
+xnum[66:70,]
+```
+This code processes a subset of numeric and integer columns from the dataset X by handling missing values systematically.The xnum object is created, containing only numeric and integer columns from X. The rows from 66 to 70 are displayed as a preview.
+The colSums(is.na(xnum)) line calculates the number of missing values in each column of xnum.
+The xnumna object is created to flag missing values by converting NA values to 1 and non-missing values to 0 for each column. Rows 66 to 70 are displayed for preview.
+The mzimpute function is defined to impute missing values in a column. If more than half of the non-missing values are zero, missing values are replaced with zero; otherwise, they are replaced with the column's mean.
+The apply function applies mzimpute to each column of xnum, and the updated xnum is displayed for rows 66 to 70.
+```{r}
+# replace/add the variables in new data frame
+for(v in colnames(xnum)){
+X[,v] <- xnum[,v]
+X[,paste(v,"NA", sep=".")] <- xnumna[,v] }
+X[144:147,]
+```
+
+This code updates the dataset X by incorporating the imputed numeric variables and their missing-value flags for each variable in xnum (the imputed numeric columns):
+It replaces the corresponding column in X with the imputed values from xnum.
+It adds a new column to X with the same variable name followed by ".NA", containing the missing-value flags (1 for previously missing, 0 for non-missing).
+Finally, it previews rows 144 to 147 of the updated X dataset to confirm the changes.
+This process ensures that X now includes both the cleaned/imputed numeric data and indicators for rows that originally had missing values.
+
+```{r}
+xhte <- sparse.model.matrix(~., data=cbind(numhh=P$numhh, X))[,-1]
+xhte[1:2,1:4]
+dim(xhte)
+```
+
+It constructs a sparse model matrix xhte using the sparse.model.matrix function from the Matrix package. The formula ~. means all variables in the input data are included as predictors. The input data is a combination of P$numhh and the dataset X.
+The [,-1] part removes the intercept column from the sparse model matrix, which is included by default.
+The [1:2,1:4] previews the first two rows and the first four columns of xhte to check its structure and contents.
+dim(xhte) provides the dimensions of the resulting matrix, showing the number of rows and columns.
+
+```{r}
+dxhte <- P$selected*xhte
+colnames(dxhte) <- paste("d",colnames(xhte), sep=".")
+htedesign <- cbind(xhte,d=P$selected,dxhte)
+# include the numhh controls and baseline treatment without penalty
+htefit <- gamlr(x=htedesign, y=P$doc_any_12m, free=c("numhh2","numhh3+","d"))
+gam <- coef(htefit)[-(1:(ncol(xhte)+1)), ]
+round(sort(gam)[1:6],4)
+round(sort(gam, decreasing=TRUE)[1:6],4)
+```
+This code accomplishes several tasks related to preparing data for a generalized additive model and extracting relevant coefficients. It creates a new variable dxhte, which is the product of P$selected and xhte. This interaction term captures the effect of the treatment variable (selected) on each of the features in xhte.
+The column names of dxhte are prefixed with "d." to indicate they are interaction terms.
+The design matrix htefit is created by combining xhte, the treatment variable d, and the interaction terms dxhte. This matrix serves as the input for the model.
+The gamlr function fits a generalized additive model to predict P$doc_any_12m using the design matrix htefit. The free argument specifies which variables should not be penalized during the model fitting (in this case, the baseline treatment and the controls for household size).
+Coefficients from the fitted model are extracted, excluding the first columns (which correspond to the intercept and the variables in xhte).
+The six smallest coefficients (indicating the least positive effect) and the six largest coefficients (indicating the most positive effect) are rounded and displayed.
+
+```{r}
+load("/Users/annelies2/Downloads/dominicks-beer.rda")
+head(wber)
+wber = wber[sample(nrow(wber), 100000), ]
+head(upc)
+dim(upc)
+wber$lp <- log(12*wber$PRICE/upc[wber$UPC,"OZ"]) #ln price per 12 ounces
+```
+It displays the first few rows of the wber dataset.
+The dataset wber is then sampled to retain only 100,000 rows. This is done to reduce the dataset size for easier handling and analysis.
+The head(upc) command displays the first few rows of the upc dataset, which likely includes information related to the Universal Product Code (UPC) for the beer products.
+A new variable lp is created in the wber dataset. This variable represents the natural logarithm of the price per 12 ounces of beer. It calculates the price per ounce and then scales it to 12 ounces before applying the logarithm.
+```{r}
+coef( margfit <- lm(log(MOVE) ~ lp, data=wber[,]) )
+```
+The code performs a linear regression analysis where the dependent variable is the natural logarithm of quantity sold, and the independent variable is lp, which represents the log price per 12 ounces of beer. 
+
+```{r}
+# numeric matrices for week, store, item
+wber$s <- factor(wber$STORE)
+wber$u <- factor(wber$UPC)
+wber$w <- factor(wber$WEEK)
+xs <- sparse.model.matrix( ~ s-1, data=wber)
+xu <- sparse.model.matrix( ~ u-1, data=wber)
+xw <- sparse.model.matrix( ~ w-1, data=wber)
+
+# parse the item description text as a bag o' words
+library(tm)
+descr <- Corpus(VectorSource(as.character(upc$DESCRIP)))
+descr <- DocumentTermMatrix(descr)
+descr <- sparseMatrix(i=descr$i,j=descr$j,x=as.numeric(descr$v>0), # convert from stm to Matrix format
+              dims=dim(descr),dimnames=list(rownames(upc),colnames(descr)))
+
+descr[1:5,1:6]
+descr[287,descr[287,]!=0]
+
+controls <- cbind(xs, xu, xw, descr[wber$UPC,]) 
+dim(controls)
+```
+The code begins by converting categorical variables for stores, items (UPC), and weeks into sparse matrices, which efficiently encode these as binary indicator variables without taking up unnecessary memory. It then processes item descriptions from the upc dataset into a "bag of words" representation using text-mining techniques. This involves creating a document-term matrix where each row corresponds to an item, and each column represents the presence or absence of specific words in the descriptions. Finally, it combines these sparse matrices—categorical variables for weeks, stores, and items, along with the text-derived features—into a single control matrix, which can then be used in regression or machine learning models.
+```{r}
+# naive lasso
+naivefit <- gamlr(x=cbind(lp=wber$lp,controls)[,], y=log(wber$MOVE), free=1, standardize=FALSE)
+print( coef(naivefit)[1:2,] )
+```
+
+The code fits a naive LASSO regression using the gamlr package. It models the logarithm of quantity sold as a function of the log price per 12 ounces and the control variables. The free=1 argument ensures the log price variable is not penalized during regularization, while standardize=FALSE prevents standardization of the input variables. Finally, it extracts and prints the coefficients for the intercept and the log price variable.
+
+```{r}
+#Experiment
+# Experiment with different penalties using gamma
+experiment_fit_low_penalty <- gamlr(x=cbind(lp=wber$lp, controls)[,], 
+                                    y=log(wber$MOVE), free=1, 
+                                    standardize=FALSE, gamma=0.5)
+
+experiment_fit_high_penalty <- gamlr(x=cbind(lp=wber$lp, controls)[,], 
+                                     y=log(wber$MOVE), free=1, 
+                                     standardize=FALSE, gamma=2.0)
+
+# Compare the coefficients for low and high penalties
+cat("Low Penalty:\n")
+print(coef(experiment_fit_low_penalty)[1:5,])
+
+cat("\nHigh Penalty:\n")
+print(coef(experiment_fit_high_penalty)[1:5,])
+
+# Compare the models using their AIC scores
+cat("\nLow Penalty AIC:", AIC(experiment_fit_low_penalty), "\n")
+cat("High Penalty AIC:", AIC(experiment_fit_high_penalty), "\n")
+```
+
+With a higher penalty (gamma=2.0), the coefficients are more shrunk toward zero compared to the lower penalty (gamma=0.5). For example, the coefficients for lp and the store factors are smaller in magnitude under the higher penalty. This demonstrates the regularization effect, where a stronger penalty reduces overfitting by discouraging large coefficients.
+Intercept Behavior: The intercept increases slightly with a higher penalty, potentially compensating for the greater shrinkage of other coefficients.
+Model Fit (AIC): The AIC scores differ between the two models. A lower AIC indicates a better trade-off between model complexity and fit. The high-penalty model shows smaller AIC values for most penalty levels, suggesting that it better balances predictive performance and regularization. However, the difference in AIC can also indicate how aggressively regularization simplifies the model.
+General Insight: Increasing the penalty simplifies the model by shrinking coefficients more and potentially setting some to zero. This is useful for avoiding overfitting, especially in high-dimensional datasets. However, too high a penalty might lead to underfitting, where the model loses important predictive power.
+
+```{r}
+# orthogonal ML
+resids <- orthoPLTE( x=controls, d=wber$lp, y=log(wber$MOVE), dreg=dreg, yreg=yreg, nfold=5)
+```
+
+The orthoPLTE function performs orthogonalized machine learning, which is a method designed to estimate treatment effects in the presence of high-dimensional covariates.
+Inputs:
+x=controls: These are the covariates used to control for confounding effects, represented as a matrix.
+d=wber$lp: This is the treatment variable of interest (log price).
+y=log(wber$MOVE): This is the outcome variable quantity sold, transformed here using the logarithm.
+dreg and yreg: These are machine learning models or methods used to predict the treatment (d) and the outcome (y) given the covariates (x).
+nfold=5: This specifies cross-validation with 5 folds to split the data into training and testing subsets, ensuring robust estimates.
+
+Purpose: The goal of this process is to obtain an unbiased estimate of the treatment effect, even when there are many covariates (potentially more than the number of observations). Orthogonalization reduces sensitivity to overfitting by separating the estimation of treatment and outcome models.
+```{r}
+#Experiment
+# orthogonal ML
+resids <- orthoPLTE( x=controls, d=wber$lp, y=log(wber$MOVE), dreg=dreg, yreg=yreg, nfold=10)
+```
+
+The choice between 5-fold and 10-fold cross-validation seems to have minimal impact on the treatment effect estimate in this case. This suggests that the dataset is large and balanced enough to provide reliable results regardless of fold choice. The slightly smaller standard error with 10-fold cross-validation indicates a marginal improvement in the precision of the estimate, as the data is split into smaller subsets, providing more frequent testing and training cycles.
+
+```{r}
+# interact items and text with price
+#lpxu <- xu*wber$lp
+#colnames(lpxu) <- paste("lp",colnames(lpxu),sep="")
+# create our interaction matrix
+xhte <- cbind(BASELINE=1,descr[wber$UPC,])
+d <- xhte*wber$lp
+colnames(d) <- paste("lp",colnames(d),sep=":")
+eachbeer <- xhte[match(rownames(upc),wber$UPC),]
+rownames(eachbeer) <- rownames(upc)
+# fullhte
+lnwberMOVE <- log(wber[['MOVE']])
+fullhte <- gamlr(x=cbind(d,controls), y=lnwberMOVE, lambda.start=0)
+#gamfull <- coef(fullhte)[2:(ncol(lpxu)+1),]
+gamfull <- drop(eachbeer%*%coef(fullhte)[2:(ncol(d)+1),])
+coef(fullhte)
+hist(gamfull, main="", xlab="elasticity", col="purple", freq=FALSE)
+```
+This code builds a model to estimate how the interaction between item characteristics (including text descriptions) and prices affects sales, with the following steps:
+
+A matrix d is created, representing the interaction of log price with a baseline and item descriptions from the descr matrix. Each interaction is labeled for clarity.
+For each unique item (beer), the eachbeer matrix maps the baseline and text features to individual items in the dataset.
+A generalized additive model with lasso regularization (gamlr) is used to predict the logarithm of sales based on the interaction terms and control variables.
+Estimated coefficients for the interaction terms are applied to the characteristics of each unique item to calculate their price elasticity.
+The final histogram visualizes the distribution of elasticity estimates, showing how responsive sales are to price changes across different items.
