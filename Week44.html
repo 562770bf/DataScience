@@ -13,7 +13,7 @@
 
 <meta name="date" content="2024-10-28" />
 
-<title>Week 44</title>
+<title>Week 44 Lecture 1</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -350,15 +350,15 @@ display: none;
 
 
 
-<h1 class="title toc-ignore">Week 44</h1>
+<h1 class="title toc-ignore">Week 44 Lecture 1</h1>
 <h4 class="author">562770bf</h4>
 <h4 class="date">2024-10-28</h4>
 
 </div>
 
 
-<p>This is the first Readme file for the Data Science and HR analytics
-course, trying out experiments on the code for week 44.</p>
+<p>This is the first Rmd file for the Data Science and HR analytics
+course, trying out experiments on the code for lecture 1 in week 44.</p>
 <p>So let’s get started.</p>
 <pre class="r"><code>CEO_Diary &lt;- read.csv(&quot;~/Dropbox/Mijn Mac (Macintosh.local)/Downloads/2017765data/behaviors/python_index-construction/baseline_results/survey_response_data.csv&quot;)</code></pre>
 <p>This command reads the csv file and calls the data in the table CEO
@@ -539,6 +539,31 @@ CEO_Diary dataset. The glm term is a function for fitting generalized
 linear models, which includes a variety of model types (e.g., logistic
 regression for binary outcomes or linear regression for continuous
 outcomes).</p>
+<pre class="r"><code>fit2 &lt;- glm(strategy ~ govoff + unions, data=CEO_Diary); summary(fit2)</code></pre>
+<pre><code>## 
+## Call:
+## glm(formula = strategy ~ govoff + unions, data = CEO_Diary)
+## 
+## Coefficients:
+##               Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)  0.0245360  0.0004362  56.254  &lt; 2e-16 ***
+## govoff      -0.0117717  0.0028990  -4.061  4.9e-05 ***
+## unions      -0.0239419  0.0066535  -3.598  0.00032 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for gaussian family taken to be 0.02358077)
+## 
+##     Null deviance: 3002.6  on 127306  degrees of freedom
+## Residual deviance: 3001.9  on 127304  degrees of freedom
+##   (98414 observations deleted due to missingness)
+## AIC: -115774
+## 
+## Number of Fisher Scoring iterations: 2</code></pre>
+<p>We get different estimates, both coefficients are now negative, but
+still small. However, hard to say anything useful here as there likely
+is no causal interpretation (significance of coefficients does not say
+that much about truth I think).</p>
 
 
 
