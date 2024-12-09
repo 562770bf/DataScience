@@ -34,7 +34,7 @@ Lecture 5:
 
 Lecture 6, part one:
 - line 29: Explore whether the relationship between price and sales varies by brand by introducing interaction terms.
-- line 33: Instead of assuming a linear relationship between log(sales) and log(price), you could experiment with a quadratic term.
+- line 33: Instead of assuming a linear relationship between log(sales) and log(price), I experimented with a quadratic term.
 - line 86: Adding interaction with time.
 - line 128: Changing the regularization parameter to observe its impact.
 - line 163: Create interaction terms between abortion rate and relevant socioeconomic factors.
