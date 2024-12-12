@@ -4,16 +4,16 @@ author: "562770bf"
 date: "2024-11-14"
 output: html_document
 ---
-This is a Rmd file for the Data Science and HR analytics course, trying out experiments on the code for lecture 4.
+This is the second Readme file for the Data Science and HR analytics course, trying out experiments on the code for lecture 4.
 
 So let's get started. 
-```{r}
+```{r, warning=FALSE} 
 SC <- read.csv("/Users/annelies2/Downloads/semiconductor.csv")
 full <- glm(FAIL ~ ., data=SC, family=binomial)
 1 - full$deviance/full$null.deviance
 ```
 Running this formula will give you an indication of how much your predictors (variables in the semiconductor dataset) improve the model's ability to predict the outcome, FAIL (whether or not a semiconductor failed). A higher R² indicates better model performance in terms of explaining the failure.
-```{r}
+```{r, warning=FALSE} 
 deviance <- function(y, pred, family=c("gaussian","binomial")){
 family <- match.arg(family)
 if(family=="gaussian"){
@@ -58,6 +58,42 @@ colMeans(Out)
 This code performs 10-fold cross-validation on a logistic regression model using the semiconductor dataset. It calculates McFadden's R² for each fold to assess model performance. The deviance function measures model fit, while the R² function compares the model to a null model. After running the cross-validation, the results are visualized with a boxplot.
 
 A negative McFadden's R² usually suggests the model is not fitting the data well, and perhaps further model improvements or more relevant predictors are needed. It’s common in situations where the predictors do not have enough predictive power or if the model is overfitting.
+
+```{r, warning=FALSE} 
+#Experiment
+# Create additional columns for R2 values with gaussian family
+Out$gaussian <- rep(NA, K)
+
+# Loop over folds for both binomial and gaussian families
+for (k in 1:K) {
+  train <- which(foldid != k) # Train on all but fold 'k'
+
+  # Fit regression using binomial family
+  r_binomial <- glm(FAIL ~ ., data=SC, subset=train, family=binomial)
+  pred_binomial <- predict(r_binomial, newdata=SC[-train,], type="response")
+  Out$full[k] <- R2(y=SC$FAIL[-train], pred=pred_binomial, family="binomial")
+
+  # Fit regression using gaussian family
+  r_gaussian <- glm(FAIL ~ ., data=SC, subset=train, family=gaussian)
+  pred_gaussian <- predict(r_gaussian, newdata=SC[-train,])
+  Out$gaussian[k] <- R2(y=SC$FAIL[-train], pred=pred_gaussian, family="gaussian")
+
+  # Print progress
+  cat(k, " ")
+}
+
+# Compare R2 values for the two families
+# Corrected boxplot call
+boxplot(Out[, c("full", "gaussian")], 
+        col=c("blue", "red"), 
+        ylab="R2", 
+        names=c("Binomial", "Gaussian"))
+
+```
+The experiment compares the performance of different families (gaussian vs. binomial) for the response variable to investigate whether the data structure benefits more from one approach over the other.
+
+The Gaussian model appears to perform better or more consistently than the Binomial model, at least in terms of R^2. However, neither model seems to fit the data particularly well, given that R^2 is generally expected to be positive for a good fit.
+
 ```{r}
 null <- glm(FAIL~1, data=SC)
 fwd <- step(null, scope=formula(full), dir="forward")
