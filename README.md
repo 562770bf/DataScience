@@ -21,6 +21,7 @@ Lecture 3:
 - line 86: Predicting probability of spam for five random emails.
 
 Lecture 4:
+- line 63: Comparing the performance of different families (gaussian vs. binomial) for the response variable to investigate whether the data structure benefits more from one approach over the other.
 - line 94: Add a new variable for time spent on each site and see change in optimal regularization parameter.
 
 Lecture 5:
