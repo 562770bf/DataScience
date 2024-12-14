@@ -18,7 +18,7 @@ The second line fits a simple linear regression model, where the logarithm of sa
 
 The fourth line fits another regression model, brandfit, where log(sales) is modeled as a function of both log(price) and the categorical variable brand. This includes the impact of brand as a factor in addition to the effect of price. The last line retrieves the coefficients of brandfit, which will now include estimates for each brand's effect and for the price elasticity
 ```{r}
-pricereg <- lm(log(sales) ~ brand, data=oj)
+pricereg <- lm(log(price) ~ brand, data=oj)
 phat <- predict(pricereg, newdata=oj)
 presid <- log(oj$price) - phat
 residfit <- lm(log(sales) ~ presid, data=oj)
