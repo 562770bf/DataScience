@@ -381,7 +381,7 @@ categorical variable brand. This includes the impact of brand as a
 factor in addition to the effect of price. The last line retrieves the
 coefficients of brandfit, which will now include estimates for each
 brand’s effect and for the price elasticity</p>
-<pre class="r"><code>pricereg &lt;- lm(log(sales) ~ brand, data=oj)
+<pre class="r"><code>pricereg &lt;- lm(log(price) ~ brand, data=oj)
 phat &lt;- predict(pricereg, newdata=oj)
 presid &lt;- log(oj$price) - phat
 residfit &lt;- lm(log(sales) ~ presid, data=oj)
